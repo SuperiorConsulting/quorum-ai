@@ -1,34 +1,36 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  // Use custom server (server.ts) which adds Socket.io
-  // Railway start command: node dist/server.js
-  // Local dev: npx ts-node --esm server.ts
+  // Next.js 15: moved out of experimental
+  serverExternalPackages: [
+    '@prisma/client',
+    '@prisma/adapter-pg',
+    'pg',
+    'twilio',
+    '@anthropic-ai/sdk',
+    'socket.io',
+    'bcryptjs',
+  ],
 
-  experimental: {
-    // Required for server components to use Node.js APIs (prisma, fs, etc.)
-    serverComponentsExternalPackages: [
-      '@prisma/client',
-      '@prisma/adapter-pg',
-      'pg',
-      'twilio',
-      '@anthropic-ai/sdk',
-      'socket.io',
-    ],
-  },
-
-  // Webpack config: mark server-only packages as external in client bundles
   webpack: (config, { isServer }) => {
+    // Allow webpack to resolve .js imports that map to .ts source files
+    config.resolve.extensionAlias = {
+      '.js':  ['.ts', '.tsx', '.js', '.jsx'],
+      '.jsx': ['.tsx', '.jsx'],
+    }
+
+    // Mark server-only packages as external in client bundles
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
-        fs: false,
-        net: false,
-        tls: false,
-        dns: false,
+        fs:            false,
+        net:           false,
+        tls:           false,
+        dns:           false,
         child_process: false,
       }
     }
+
     return config
   },
 }
