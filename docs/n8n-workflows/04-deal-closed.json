@@ -1,0 +1,109 @@
+{
+  "name": "Quorum — Deal Closed",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Deal Closed Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {
+        "path": "quorum-deal-closed",
+        "responseMode": "onReceived",
+        "responseData": "{ \"received\": true }",
+        "options": {}
+      }
+    },
+    {
+      "id": "celebrate-slack",
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [460, 200],
+      "parameters": {
+        "operation": "message",
+        "channel": "={{ $env.SLACK_DEALS_CHANNEL || '#deals' }}",
+        "text": "🎉 *Deal Closed!*\\n*Customer:* {{ $json.leadName }}\\n*Value:* ${{ $json.dealValue }}\\n*Channel:* {{ $json.channel }}\\n*Closed:* {{ $json.closedAt }}\\n\\nClosed by Quorum AI 🤖",
+        "otherOptions": {}
+      }
+    },
+    {
+      "id": "log-revenue",
+      "name": "Log Revenue to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [460, 380],
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": { "__rl": true, "value": "={{ $env.GOOGLE_SHEET_ID }}", "mode": "id" },
+        "sheetName":  { "__rl": true, "value": "Closed Deals", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Lead ID":      "={{ $json.leadId }}",
+            "Lead Name":    "={{ $json.leadName }}",
+            "Deal Value":   "={{ $json.dealValue }}",
+            "Channel":      "={{ $json.channel }}",
+            "Closed At":    "={{ $json.closedAt }}",
+            "Business ID":  "={{ $json.businessId }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "wait-24h-review",
+      "name": "Wait 24 Hours",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [680, 300],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 24,
+        "unit": "hours"
+      }
+    },
+    {
+      "id": "request-review",
+      "name": "Trigger Review Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [900, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.QUORUM_APP_URL }}/api/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-quorum-secret", "value": "={{ $env.QUORUM_WEBHOOK_SECRET }}" },
+            { "name": "Content-Type",    "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"event\": \"lead.review_request\", \"leadId\": \"{{ $json.leadId }}\", \"businessId\": \"{{ $json.businessId }}\", \"reviewUrl\": \"{{ $env.GOOGLE_REVIEW_URL }}\" }",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Deal Closed Webhook": {
+      "main": [
+        [ { "node": "Post to Slack",        "type": "main", "index": 0 } ],
+        [ { "node": "Log Revenue to Sheet", "type": "main", "index": 0 } ],
+        [ { "node": "Wait 24 Hours",        "type": "main", "index": 0 } ]
+      ]
+    },
+    "Wait 24 Hours": {
+      "main": [[ { "node": "Trigger Review Request", "type": "main", "index": 0 } ]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": true,
+  "_quorumMeta": {
+    "description": "Triggered when Quorum closes a deal. Posts to Slack, logs revenue to Google Sheets, waits 24h, then calls back to Quorum to send a Google review request.",
+    "callbackEvent": "lead.review_request",
+    "quorumFiresTo": "/webhook/quorum-deal-closed",
+    "quorumCallbackPath": "/api/webhook"
+  }
+}

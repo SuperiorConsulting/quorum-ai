@@ -1,0 +1,347 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+model Business {
+  id               String   @id @default(cuid())
+  name             String
+  ownerId          String
+  phone            String
+  email            String
+  vertical         Vertical @default(OTHER)
+  services         Json
+  pricing          Json
+  guarantees       String?
+  voiceCloneId     String?
+  ghlLocationId    String?
+  stripeCustomerId String?
+  passwordHash     String?
+  plan             Plan     @default(STARTER)
+  setupPaid        Boolean  @default(false)
+  isActive         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  leads          Lead[]
+  appointments   Appointment[]
+  competitors    Competitor[]
+  briefings      DailyBriefing[]
+  subscription   Subscription?
+  reviewRequests ReviewRequest[]
+}
+
+model Lead {
+  id                String    @id @default(cuid())
+  businessId        String
+  name              String
+  phone             String?
+  email             String?
+  channel           Channel   @default(VOICE)
+  source            String?
+  pipelineStage     Stage     @default(NEW)
+  score             Int       @default(0)
+  dealValue         Float?
+  vertical          Vertical?
+  ghlContactId      String?
+  memoryProfileId   String?
+  closeProbability  Float?
+  lastInteractionAt DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  business           Business           @relation(fields: [businessId], references: [id])
+  interactions       Interaction[]
+  appointments       Appointment[]
+  memoryProfile      MemoryProfile?
+  realEstateLead     RealEstateLead?
+  followUpSequences  FollowUpSequence[]
+  failedMemoryWrites FailedMemoryWrite[]
+  reviewRequests     ReviewRequest[]
+
+  @@index([businessId])
+  @@index([phone])
+  @@index([email])
+  @@index([pipelineStage])
+}
+
+model RealEstateLead {
+  id                  String     @id @default(cuid())
+  leadId              String     @unique
+  type                RELeadType
+  preApproved         Boolean    @default(false)
+  budget              Float?
+  targetNeighborhoods Json?
+  mustHaves           Json?
+  timeline            String?
+  currentSituation    String?
+  agentId             String?
+  showingsBooked      Int        @default(0)
+  offersSubmitted     Int        @default(0)
+  listingPrice        Float?
+  propertyAddress     String?
+
+  lead Lead @relation(fields: [leadId], references: [id])
+}
+
+model Interaction {
+  id                  String    @id @default(cuid())
+  leadId              String
+  businessId          String
+  channel             Channel
+  direction           Direction
+  transcript          String?
+  sentiment           Int       @default(0)
+  emotionDetected     String?
+  buyingSignal        Boolean   @default(false)
+  objectionRaised     String?
+  competitorMentioned String?
+  outcome             String?
+  durationSeconds     Int?
+  recordingUrl        String?
+  createdAt           DateTime  @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id])
+
+  @@index([leadId])
+  @@index([businessId])
+  @@index([createdAt])
+}
+
+model MemoryProfile {
+  id               String   @id @default(cuid())
+  leadId           String   @unique
+  preferences      Json?
+  keyFacts         Json?
+  sentimentHistory Json?
+  closingInsights  Json?
+  personalDetails  Json?
+  lastUpdatedAt    DateTime @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id])
+}
+
+model Appointment {
+  id              String            @id @default(cuid())
+  leadId          String
+  businessId      String
+  scheduledAt     DateTime
+  duration        Int               @default(60)
+  type            AppointmentType   @default(CONSULTATION)
+  status          AppointmentStatus @default(CONFIRMED)
+  calendarEventId String?
+  remindersSent   Int               @default(0)
+  notes           String?
+  createdAt       DateTime          @default(now())
+
+  lead     Lead     @relation(fields: [leadId], references: [id])
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
+  @@index([scheduledAt])
+}
+
+model Competitor {
+  id            String   @id @default(cuid())
+  businessId    String
+  name          String
+  weaknesses    String?
+  ourAdvantages String?
+  pricingNotes  String?
+  proofPoints   String?
+  talkingPoints String?
+  createdAt     DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
+}
+
+model FollowUpSequence {
+  id           String         @id @default(cuid())
+  leadId       String
+  businessId   String
+  sequenceType SequenceType
+  currentStep  Int            @default(1)
+  totalSteps   Int
+  nextActionAt DateTime?
+  status       SequenceStatus @default(ACTIVE)
+  createdAt    DateTime       @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id])
+
+  @@index([leadId])
+  @@index([nextActionAt])
+  @@index([status])
+}
+
+model DailyBriefing {
+  id                    String    @id @default(cuid())
+  businessId            String
+  date                  DateTime
+  revenueClosedOvernite Float     @default(0)
+  dealsCount            Int       @default(0)
+  appointmentsBooked    Int       @default(0)
+  hotLeadsCount         Int       @default(0)
+  winBackResponses      Int       @default(0)
+  briefingScript        String?
+  delivered             Boolean   @default(false)
+  deliveredAt           DateTime?
+  createdAt             DateTime  @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
+  @@index([date])
+}
+
+model Subscription {
+  id                   String    @id @default(cuid())
+  businessId           String    @unique
+  plan                 Plan
+  setupFeeAmount       Float
+  monthlyRetainer      Float
+  stripeSubscriptionId String?
+  status               SubStatus @default(ACTIVE)
+  startedAt            DateTime  @default(now())
+  nextBillingAt        DateTime?
+
+  business Business @relation(fields: [businessId], references: [id])
+}
+
+model FailedMemoryWrite {
+  id              String   @id @default(cuid())
+  leadId          String
+  businessId      String
+  interactionData Json
+  failureReason   String
+  attemptCount    Int      @default(1)
+  resolved        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id])
+
+  @@index([resolved])
+  @@index([createdAt])
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Vertical {
+  HOME_SERVICES
+  REAL_ESTATE
+  LEGAL
+  MEDICAL
+  AUTO
+  FITNESS
+  MED_SPA
+  DENTAL
+  FINANCIAL
+  CONTRACTOR
+  WELLNESS
+  VETERINARY
+  RESTAURANT
+  OTHER
+}
+
+enum Plan {
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+model ReviewRequest {
+  id             String              @id @default(cuid())
+  leadId         String
+  businessId     String
+  channel        Channel             @default(SMS)
+  status         ReviewRequestStatus @default(PENDING)
+  requestSentAt  DateTime?
+  followUpSentAt DateTime?
+  reviewUrl      String?
+  platform       String?             // google | facebook | yelp
+  createdAt      DateTime            @default(now())
+
+  lead     Lead     @relation(fields: [leadId], references: [id])
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@unique([leadId])
+  @@index([businessId])
+  @@index([status])
+}
+
+enum ReviewRequestStatus {
+  PENDING
+  SENT
+  FOLLOWED_UP
+  COMPLETED
+  SKIPPED
+}
+
+enum Stage {
+  NEW
+  QUALIFYING
+  PROPOSAL
+  NEGOTIATING
+  CLOSED_WON
+  CLOSED_LOST
+  WIN_BACK
+}
+
+enum Channel {
+  VOICE
+  SMS
+  EMAIL
+  CHAT
+}
+
+enum Direction {
+  INBOUND
+  OUTBOUND
+}
+
+enum AppointmentType {
+  SHOWING
+  CONSULTATION
+  CALL
+  LISTING_APPT
+  OTHER
+}
+
+enum AppointmentStatus {
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum RELeadType {
+  BUYER
+  SELLER
+  INVESTOR
+  RENTER
+}
+
+enum SequenceType {
+  FOLLOW_UP
+  WIN_BACK
+  ONBOARDING
+  NURTURE
+}
+
+enum SequenceStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum SubStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  TRIALING
+}

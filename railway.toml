@@ -1,0 +1,39 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+# ── Web service (Next.js + Socket.io custom server) ──────────────────────────
+[[services]]
+name = "web"
+
+[services.deploy]
+startCommand = "node dist/server.js"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+[services.deploy.releaseCommand]
+# Run DB migrations before new version goes live
+command = "npx prisma migrate deploy"
+
+[[services.variables]]
+name = "PORT"
+value = "3000"
+
+[[services.variables]]
+name = "NODE_ENV"
+value = "production"
+
+# ── Worker service (Railway cron process) ────────────────────────────────────
+[[services]]
+name = "worker"
+
+[services.deploy]
+startCommand = "node dist/worker/index.js"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+
+[[services.variables]]
+name = "NODE_ENV"
+value = "production"

@@ -1,0 +1,97 @@
+{
+  "name": "Quorum — Appointment Booked",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Appointment Booked Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {
+        "path": "quorum-appointment-booked",
+        "responseMode": "onReceived",
+        "responseData": "{ \"received\": true }",
+        "options": {}
+      }
+    },
+    {
+      "id": "log-to-sheet",
+      "name": "Log to Appointments Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [460, 200],
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": { "__rl": true, "value": "={{ $env.GOOGLE_SHEET_ID }}", "mode": "id" },
+        "sheetName":  { "__rl": true, "value": "Appointments", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Appointment ID":   "={{ $json.appointmentId }}",
+            "Lead Name":        "={{ $json.leadName }}",
+            "Lead Phone":       "={{ $json.leadPhone }}",
+            "Appointment Type": "={{ $json.appointmentType }}",
+            "Scheduled At":     "={{ $json.scheduledAt }}",
+            "Location":         "={{ $json.location }}",
+            "Business ID":      "={{ $json.businessId }}",
+            "Booked At":        "={{ $now }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "wait-24h-reminder",
+      "name": "Wait 23.5 Hours",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [460, 400],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 23,
+        "unit": "hours"
+      }
+    },
+    {
+      "id": "send-24h-reminder",
+      "name": "Trigger 24h Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.QUORUM_APP_URL }}/api/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-quorum-secret", "value": "={{ $env.QUORUM_WEBHOOK_SECRET }}" },
+            { "name": "Content-Type",    "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"event\": \"appointment.reminder\", \"appointmentId\": \"{{ $json.appointmentId }}\", \"minutesBefore\": 1440 }",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Appointment Booked Webhook": {
+      "main": [
+        [ { "node": "Log to Appointments Sheet", "type": "main", "index": 0 } ],
+        [ { "node": "Wait 23.5 Hours",           "type": "main", "index": 0 } ]
+      ]
+    },
+    "Wait 23.5 Hours": {
+      "main": [[ { "node": "Trigger 24h Reminder", "type": "main", "index": 0 } ]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": true,
+  "_quorumMeta": {
+    "description": "Triggered when Quorum books an appointment. Logs to Google Sheets and schedules a 24h reminder callback to Quorum.",
+    "callbackEvent": "appointment.reminder",
+    "quorumFiresTo": "/webhook/quorum-appointment-booked",
+    "quorumCallbackPath": "/api/webhook"
+  }
+}

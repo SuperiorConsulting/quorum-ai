@@ -1,0 +1,61 @@
+{
+  "name": "quorum-ai",
+  "version": "1.0.0",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build && tsc --outDir dist",
+    "start": "node dist/server.js",
+    "worker": "node --loader ts-node/esm src/worker/index.ts",
+    "worker:build": "tsc --outDir dist && node dist/worker/index.js",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "npx ts-node --esm prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "prisma": {
+    "seed": "npx ts-node --esm prisma/seed.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@prisma/adapter-pg": "^7.6.0",
+    "@prisma/client": "^7.6.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/pg": "^8.20.0",
+    "dotenv": "^17.4.1",
+    "prisma": "^7.6.0",
+    "typescript": "^6.0.2"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.40.1",
+    "@pinecone-database/pinecone": "^7.1.0",
+    "@sendgrid/mail": "^8.1.6",
+    "@types/node-cron": "^3.0.11",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.27",
+    "bcryptjs": "^3.0.3",
+    "framer-motion": "^12.38.0",
+    "googleapis": "^171.4.0",
+    "mem0ai": "^2.4.6",
+    "next": "^15.5.14",
+    "next-auth": "^5.0.0-beta.30",
+    "node-cron": "^4.2.1",
+    "openai": "^6.33.0",
+    "pg": "^8.20.0",
+    "postcss": "^8.5.8",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
+    "stripe": "^22.0.0",
+    "tailwindcss": "^4.2.2",
+    "twilio": "^5.13.1"
+  }
+}

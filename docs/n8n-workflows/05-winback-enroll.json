@@ -1,0 +1,109 @@
+{
+  "name": "Quorum — Win-Back Enrollment",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Win-Back Enroll Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {
+        "path": "quorum-winback-enroll",
+        "responseMode": "onReceived",
+        "responseData": "{ \"received\": true }",
+        "options": {}
+      }
+    },
+    {
+      "id": "check-days-dormant",
+      "name": "Check Dormancy Level",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.daysDormant }}",
+              "operation": "largerEqual",
+              "value2": 14
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "enroll-in-quorum",
+      "name": "Enroll in Quorum Win-Back",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 220],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.QUORUM_APP_URL }}/api/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-quorum-secret", "value": "={{ $env.QUORUM_WEBHOOK_SECRET }}" },
+            { "name": "Content-Type",    "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"event\": \"lead.winback\", \"leadId\": \"{{ $json.leadId }}\", \"businessId\": \"{{ $json.businessId }}\" }",
+        "options": {}
+      }
+    },
+    {
+      "id": "tag-in-ghl",
+      "name": "Tag in GHL as Dormant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 380],
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/contacts/{{ $json.ghlContactId }}/tags",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $env.GHL_API_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Version",       "value": "2021-07-28" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"tags\": [\"dormant\", \"win-back\"] }",
+        "options": {}
+      }
+    },
+    {
+      "id": "skip-too-fresh",
+      "name": "Skip (Too Recent)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [680, 500],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Win-Back Enroll Webhook": {
+      "main": [[ { "node": "Check Dormancy Level", "type": "main", "index": 0 } ]]
+    },
+    "Check Dormancy Level": {
+      "main": [
+        [ { "node": "Enroll in Quorum Win-Back", "type": "main", "index": 0 },
+          { "node": "Tag in GHL as Dormant",     "type": "main", "index": 0 } ],
+        [ { "node": "Skip (Too Recent)",          "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": true,
+  "_quorumMeta": {
+    "description": "Triggered by Quorum when a lead goes dormant (14+ days no interaction). Validates dormancy threshold, enrolls in Quorum win-back sequence, and tags in GHL.",
+    "callbackEvent": "lead.winback",
+    "quorumFiresTo": "/webhook/quorum-winback-enroll",
+    "quorumCallbackPath": "/api/webhook"
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "name": "Quorum — Lead Intake Router",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Inbound Lead Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {
+        "path": "quorum-lead-intake",
+        "responseMode": "onReceived",
+        "responseData": "{ \"received\": true }",
+        "options": {}
+      }
+    },
+    {
+      "id": "normalize-lead",
+      "name": "Normalize Lead Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "parameters": {
+        "jsCode": "const body = $input.first().json;\nconst source = body.source || 'web_form';\n\n// Map source-specific fields to a standard format\nconst normalized = {\n  event: 'lead.intake',\n  businessId: body.businessId,\n  source,\n  name: body.leadName || body.name || 'Unknown',\n  phone: body.phone || body.Phone || null,\n  email: body.email || body.Email || null,\n  propertyAddress: body.propertyAddress || body.address || null,\n  propertyPrice: body.propertyPrice || body.price || null,\n  message: body.message || body.comments || null,\n  vertical: body.vertical || (body.propertyAddress ? 'REAL_ESTATE' : 'OTHER'),\n  receivedAt: new Date().toISOString(),\n};\n\nreturn [{ json: normalized }];"
+      }
+    },
+    {
+      "id": "check-business-id",
+      "name": "Has Business ID?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 300],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.businessId }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "forward-to-quorum",
+      "name": "Forward to Quorum",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [900, 240],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.QUORUM_APP_URL }}/api/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "x-quorum-secret", "value": "={{ $env.QUORUM_WEBHOOK_SECRET }}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": { "timeout": 10000 }
+      }
+    },
+    {
+      "id": "log-missing-business",
+      "name": "Log Missing BusinessId",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [900, 380],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Inbound Lead Webhook": {
+      "main": [[ { "node": "Normalize Lead Data", "type": "main", "index": 0 } ]]
+    },
+    "Normalize Lead Data": {
+      "main": [[ { "node": "Has Business ID?", "type": "main", "index": 0 } ]]
+    },
+    "Has Business ID?": {
+      "main": [
+        [ { "node": "Forward to Quorum", "type": "main", "index": 0 } ],
+        [ { "node": "Log Missing BusinessId", "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": true,
+  "_quorumMeta": {
+    "description": "Receives inbound leads from Zillow, Realtor.com, Facebook Ads, Google Ads, and web forms. Normalizes the payload and forwards to Quorum's /api/webhook endpoint.",
+    "callbackEvent": "lead.intake",
+    "quorumFiresTo": "N/A — this workflow is triggered by external sources, not Quorum",
+    "quorumCallbackPath": "/api/webhook"
+  }
+}

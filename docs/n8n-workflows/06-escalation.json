@@ -1,0 +1,130 @@
+{
+  "name": "Quorum — Lead Escalation",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Escalation Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {
+        "path": "quorum-escalate",
+        "responseMode": "onReceived",
+        "responseData": "{ \"received\": true }",
+        "options": {}
+      }
+    },
+    {
+      "id": "route-by-urgency",
+      "name": "Route by Urgency",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [460, 300],
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+                "conditions": [{ "leftValue": "={{ $json.urgency }}", "rightValue": "HIGH", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "HIGH"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+                "conditions": [{ "leftValue": "={{ $json.urgency }}", "rightValue": "MEDIUM", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "MEDIUM"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "sms-high-urgency",
+      "name": "SMS Owner (High Urgency)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [700, 160],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/{{ $env.TWILIO_ACCOUNT_SID }}/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "To",   "value": "={{ $env.OWNER_PHONE }}" },
+            { "name": "From", "value": "={{ $env.TWILIO_PHONE_NUMBER }}" },
+            { "name": "Body", "value": "🚨 QUORUM ESCALATION\\nLead: {{ $json.leadName }}\\nPhone: {{ $json.phone }}\\nReason: {{ $json.reason }}\\nLast message: {{ $json.lastMessage }}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "slack-medium-urgency",
+      "name": "Post to Slack (Medium)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [700, 320],
+      "parameters": {
+        "operation": "message",
+        "channel": "={{ $env.SLACK_ALERTS_CHANNEL || '#alerts' }}",
+        "text": "⚠️ *Lead Needs Attention*\\n*Name:* {{ $json.leadName }}\\n*Phone:* {{ $json.phone }}\\n*Reason:* {{ $json.reason }}\\n*Last message:* {{ $json.lastMessage }}",
+        "otherOptions": {}
+      }
+    },
+    {
+      "id": "ack-quorum",
+      "name": "Acknowledge to Quorum",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [940, 240],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.QUORUM_APP_URL }}/api/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-quorum-secret", "value": "={{ $env.QUORUM_WEBHOOK_SECRET }}" },
+            { "name": "Content-Type",    "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"event\": \"lead.escalate_ack\", \"leadId\": \"{{ $json.leadId }}\", \"agentNotified\": \"{{ $json.urgency === 'HIGH' ? 'sms' : 'slack' }}\" }",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Escalation Webhook": {
+      "main": [[ { "node": "Route by Urgency", "type": "main", "index": 0 } ]]
+    },
+    "Route by Urgency": {
+      "HIGH":   [[ { "node": "SMS Owner (High Urgency)", "type": "main", "index": 0 } ]],
+      "MEDIUM": [[ { "node": "Post to Slack (Medium)",   "type": "main", "index": 0 } ]]
+    },
+    "SMS Owner (High Urgency)": {
+      "main": [[ { "node": "Acknowledge to Quorum", "type": "main", "index": 0 } ]]
+    },
+    "Post to Slack (Medium)": {
+      "main": [[ { "node": "Acknowledge to Quorum", "type": "main", "index": 0 } ]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": true,
+  "_quorumMeta": {
+    "description": "Triggered by Quorum when a lead shows HIGH urgency + very negative sentiment. Routes HIGH to SMS owner, MEDIUM to Slack, then acknowledges back to Quorum.",
+    "callbackEvent": "lead.escalate_ack",
+    "quorumFiresTo": "/webhook/quorum-escalate",
+    "quorumCallbackPath": "/api/webhook"
+  }
+}

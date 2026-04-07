@@ -1,0 +1,103 @@
+{
+  "name": "Quorum — Lead Qualified Router",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Lead Qualified Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {
+        "path": "quorum-lead-qualified",
+        "responseMode": "onReceived",
+        "responseData": "{ \"received\": true }",
+        "options": {}
+      }
+    },
+    {
+      "id": "set-context",
+      "name": "Set Lead Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [460, 300],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            { "id": "1", "name": "leadId",     "value": "={{ $json.leadId }}",     "type": "string" },
+            { "id": "2", "name": "leadName",   "value": "={{ $json.leadName }}",   "type": "string" },
+            { "id": "3", "name": "businessId", "value": "={{ $json.businessId }}", "type": "string" },
+            { "id": "4", "name": "score",      "value": "={{ $json.score }}",      "type": "number" },
+            { "id": "5", "name": "vertical",   "value": "={{ $json.vertical }}",   "type": "string" },
+            { "id": "6", "name": "phone",      "value": "={{ $json.phone }}",      "type": "string" },
+            { "id": "7", "name": "email",      "value": "={{ $json.email }}",      "type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "notify-agent-sms",
+      "name": "Notify Agent via SMS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/{{ $env.TWILIO_ACCOUNT_SID }}/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "To",   "value": "={{ $env.AGENT_NOTIFICATION_PHONE }}" },
+            { "name": "From", "value": "={{ $env.TWILIO_PHONE_NUMBER }}" },
+            { "name": "Body", "value": "🔥 QUORUM HOT LEAD\\nName: {{ $json.leadName }}\\nScore: {{ $json.score }}/100\\nVertical: {{ $json.vertical }}\\nPhone: {{ $json.phone }}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "update-crm-stage",
+      "name": "Update CRM Stage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 380],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.QUORUM_APP_URL }}/api/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-quorum-secret", "value": "={{ $env.QUORUM_WEBHOOK_SECRET }}" },
+            { "name": "Content-Type",    "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"event\": \"lead.escalate_ack\", \"leadId\": \"{{ $json.leadId }}\", \"agentNotified\": \"sms\" }",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Lead Qualified Webhook": {
+      "main": [[ { "node": "Set Lead Context", "type": "main", "index": 0 } ]]
+    },
+    "Set Lead Context": {
+      "main": [
+        [ { "node": "Notify Agent via SMS", "type": "main", "index": 0 } ],
+        [ { "node": "Update CRM Stage",     "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": true,
+  "_quorumMeta": {
+    "description": "Triggered by Quorum when a lead crosses the 70-point qualification threshold. Notifies the agent via SMS and updates CRM stage.",
+    "callbackEvent": "lead.escalate_ack",
+    "quorumFiresTo": "/webhook/quorum-lead-qualified",
+    "quorumCallbackPath": "/api/webhook"
+  }
+}
