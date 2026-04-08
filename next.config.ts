@@ -28,6 +28,17 @@ const nextConfig: NextConfig = {
         tls:           false,
         dns:           false,
         child_process: false,
+        // node: protocol URIs
+        'node:fs':            false,
+        'node:path':          false,
+        'node:crypto':        false,
+        'node:os':            false,
+        'node:module':        false,
+        'node:stream':        false,
+        'node:buffer':        false,
+        'node:util':          false,
+        'node:events':        false,
+        'node:async_hooks':   false,
       }
     }
 

@@ -2,8 +2,10 @@ import NextAuth from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { prisma } from './prisma.js'
+import { authConfig } from './auth.config.js'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {
@@ -35,30 +37,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-
-  callbacks: {
-    // Persist businessId in the JWT
-    jwt({ token, user }) {
-      if (user) {
-        token['businessId'] = (user as { businessId: string }).businessId
-      }
-      return token
-    },
-    // Expose businessId in session.user
-    session({ session, token }) {
-      if (session.user && token['businessId']) {
-        (session.user as { businessId?: string }).businessId = token['businessId'] as string
-      }
-      return session
-    },
-  },
-
-  pages: {
-    signIn:  '/auth/signin',
-    error:   '/auth/signin',
-  },
-
-  session: { strategy: 'jwt' },
-
-  secret: process.env['NEXTAUTH_SECRET'] ?? 'quorum-dev-secret-change-in-production',
 })
