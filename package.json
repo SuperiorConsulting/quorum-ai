@@ -36,6 +36,7 @@
     "@anthropic-ai/sdk": "^0.40.1",
     "@pinecone-database/pinecone": "^7.1.0",
     "@sendgrid/mail": "^8.1.6",
+    "@tailwindcss/postcss": "^4.2.2",
     "@types/node-cron": "^3.0.11",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
